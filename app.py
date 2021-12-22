@@ -1,5 +1,4 @@
 import ast
-!pip install transformers
 import json, pprint, os, uuid, random, bisect, sys, torch, pickle, transformers
 import numpy as np
 import pandas as pd
