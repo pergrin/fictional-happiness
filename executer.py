@@ -159,7 +159,7 @@ class Constants:
     self.task_learning_rate_fac = 100
     self.grad_acc = True
     self.oversample = False
-    self.epochs = 30
+    self.epochs = 5
     self.prop_drop = 0.2
     self.entity_types = 7
     self.relation_types = 7
@@ -197,7 +197,7 @@ weighted_category = False
 task_learning_rate_fac = 100
 grad_acc = True
 oversample = False
-epochs = 30
+epochs = 5
 prop_drop = 0.2
 entity_types = 7
 relation_types = 7
@@ -747,7 +747,25 @@ def take_first_tokens(embedding, words):
 			reduced_embedding.append(embedding[i])
 	return reduced_embedding
 
-def evaluate_val(eval_dataset, epoch, data_val, entity_weights):
+train_generator = data_generator('Train', device, is_training=True, 
+              neg_entity_count = constants.neg_entity_count,
+              neg_relation_count = constants.neg_relation_count,
+              max_span_size = constants.max_span_size)
+train_dataset = list(train_generator)
+test_generator = data_generator('Test', device, is_training=True, 
+              neg_entity_count = constants.neg_entity_count,
+              neg_relation_count = constants.neg_relation_count,
+              max_span_size = constants.max_span_size)
+test_dataset = list(test_generator)
+config = BertConfig.from_pretrained('bert-base-uncased')
+random.shuffle(train_dataset)
+new_dataset = {'train': None, 'test': None, 'val': None}
+new_dataset['train'], new_dataset['test'], new_dataset['val'] = train_dataset, test_dataset, test_dataset
+entity_weights = torch.tensor([1.0]*len(range(constants.entity_types)))
+train_size = len(new_dataset['train'])
+val_dataset = new_dataset['val']
+
+def evaluate_val(neural_model, eval_dataset, epoch, data_val, entity_weights):
 	neural_model.eval()
 	eval_size = len(eval_dataset)
 	eval_entity_span_pred = []
@@ -772,29 +790,11 @@ def evaluate_val(eval_dataset, epoch, data_val, entity_weights):
 		], keys = ['Entity span', 'Strict relation'])
 	return results
 
-
-train_generator = data_generator('Train', device, is_training=True, 
-              neg_entity_count = constants.neg_entity_count,
-              neg_relation_count = constants.neg_relation_count,
-              max_span_size = constants.max_span_size)
-train_dataset = list(train_generator)
-test_generator = data_generator('Test', device, is_training=True, 
-              neg_entity_count = constants.neg_entity_count,
-              neg_relation_count = constants.neg_relation_count,
-              max_span_size = constants.max_span_size)
-test_dataset = list(test_generator)
-config = BertConfig.from_pretrained('bert-base-uncased')
-random.shuffle(train_dataset)
-new_dataset = {'train': None, 'test': None, 'val': None}
-new_dataset['train'], new_dataset['test'], new_dataset['val'] = train_dataset, test_dataset, test_dataset
-entity_weights = torch.tensor([1.0]*len(range(constants.entity_types)))
-train_size = len(new_dataset['train'])
-val_dataset = new_dataset['val']
-
 neural_model = Joint_Model.from_pretrained('bert-base-uncased', config=config, relation_types = constants.relation_types,
             entity_types = constants.entity_types, width_embedding_size = constants.width_embedding_size,
             prop_drop = constants.prop_drop, max_pairs=constants.max_pairs)
-constants.checkpoint = 0
+
+#constants.checkpoint = 0
 neural_model.to(device)
 optimizer_params1, optimizer_params2 = get_optimizer_params(neural_model)
 optimizer1 = AdamW(optimizer_params1, lr=constants.lr, weight_decay=constants.weight_decay, correct_bias=False)
@@ -805,6 +805,7 @@ scheduler2 = transformers.get_linear_schedule_with_warmup(optimizer2,
                                                           num_warmup_steps=constants.lr_warmup*train_size//constants.batch_size\
                                                           *constants.epochs, num_training_steps=train_size//constants.batch_size*\
                                                           constants.epochs)
+
 for epoch in range(constants.epochs):
   losses=[]
   entity_losses = []
@@ -848,7 +849,13 @@ for epoch in range(constants.epochs):
       evaluate_results(train_entity_true, train_entity_pred, entity_label_map, entity_classes),
       evaluate_results(train_relation_true, train_relation_pred, relation_label_map, relation_classes)]\
       , keys=['Entity', 'Relation'])
-print(evaluate_val(new_dataset['test'], epoch, 'test', entity_weights))
+
+torch.save(neural_model.state_dict(), './epoch_9.model')
+files.download('epoch_9.model')
+
+results
+
+
 
 import  uuid
 output_dicts = []
