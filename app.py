@@ -757,13 +757,6 @@ for epoch in range(epochs):
       evaluate_results(train_relation_true, train_relation_pred, relation_label_map, relation_classes)]\
       , keys=['Entity', 'Relation'])
 
-torch.save(neural_model.state_dict(), './epoch_9.model')
-files.download('epoch_9.model')
-
-results
-
-
-
 output_dicts = []
 def convert(doc, full_text, out_folder):
 	dic={}
