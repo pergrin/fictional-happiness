@@ -14,7 +14,7 @@ Users can use there own or other datasets after converting there respective inpu
 Steps:
 1. Format input data to required format as mentioned:
 ```diff
-+{
+{
     "mentions": [
         {
             "begin": 2,
@@ -64,7 +64,7 @@ Steps:
 2. Train the model
 3. Tune your model based on the results on validation set.
 4. Call "predict" function to get results on raw text inputs tokenized into sentences.
-
+```diff
 import nltk<br />
 import nltk.data<br />
 nltk.download('punkt')<br />
@@ -73,5 +73,5 @@ sent_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')<br />
 sentences = "input text"<br />
 <br />
 predict(neural\_model, sent_tokenizer.tokenize(sentences))<br />
-
+```
 
