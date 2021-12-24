@@ -22,7 +22,7 @@ Steps:
             "end": 7,
             "type": "Generic",
             "text": "model"
-        }....],<br />
+        }....],
 	"relations": [
         {
             "args": [
@@ -31,7 +31,7 @@ Steps:
             ],
             "type": "USED-FOR",
             "id": "r0"
-        }....],<br />
+        }....],
 	"sentences": [
         {
             "begin": 0,
@@ -55,8 +55,8 @@ Steps:
                     "text": "is",
                     "end": 10,
                     "id": "s0-t2"
-                }....]}],<br />
-	"text": "A model is presented to characterize the class of languages obtained by adding reduplication to context-free languages....",<br />
+                }....]}],
+	"text": "A model is presented to characterize the class of languages obtained by adding reduplication to context-free languages....",
     "id": "c827f119-12ce-42db-8dce-f4a8ab1caa6c"
 }
 ```
