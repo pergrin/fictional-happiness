@@ -1,5 +1,6 @@
 import ast
-import json, pprint, os, uuid, random, bisect, sys, torch, pickle, transformers
+!pip install transformers
+import json, pprint, os, uuid, random, bisect, sys, torch, pickle, transformers, nltk
 import numpy as np
 import pandas as pd
 import torch.nn.functional as F
@@ -11,115 +12,10 @@ from torch.utils.data import Subset, RandomSampler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_recall_fscore_support, f1_score
 from tqdm import tqdm
-
-inp_data = json.load(open('sciERC_raw.json', r))
-formatted_data = []
-all_rels, all_mentions = [], []
-poss_rels = {}
-
-entity_encode = {'None':0, 'Generic':1, 'Material':2, 'Method':3, 'Metric':4, 'OtherScientificTerm':5, 'Task':6}
-relation_encode = {'None':0, 'COMPARE':1, 'CONJUNCTION':2, 'EVALUATE-FOR':3, 'FEATURE-OF':4, 'HYPONYM-OF':5, 'PART-OF': 6, 'USED-FOR':7}
-relation_possibility={}
-
-def make_phrases(toks):
-  sent_str=''
-  for tok_num in range(len(toks)):
-    if sent_str!='' and sent_str[-1]=='-':
-      sent_str+=toks[tok_num]
-    elif toks[tok_num][0].isalnum():
-      sent_str+=' '+toks[tok_num]
-    else:
-      sent_str+=toks[tok_num]
-  return sent_str
-
-for dic in inp_data:	
-  annotations={}
-  sents=[]
-  for ele in dic['sentences']:
-    sents.append(make_phrases(ele))
-  if sents[0][0]==' ': sents[0]=sents[0][1:]
-  full_text = ''.join(sents)
-  annotations['id']=str(uuid.uuid4())
-  annotations['text']=full_text
-  annotations['sentences']=[]
-  annotations['mentions']=[]
-  annotations['relations']=[]
-  for i, sent in enumerate(dic['sentences']):
-    sent_dic={}
-    sent_dic['id']='s'+str(i)
-    sent_dic['text']=sents[i]
-    sent_dic['begin']=full_text.find(sent_dic['text'])
-    sent_dic['end']=sent_dic['begin']+len(sent_dic['text'])
-    sent_dic['tokens']=[]			
-    prev_tok_end = 0
-    for j, tok in enumerate(sent):
-      tok_dic={}
-      tok_dic['id']=sent_dic['id']+'-t'+str(j)
-      tok_dic['text']=tok
-      tok_dic['begin']=sent_dic['begin']+sent_dic['text'].find(tok, prev_tok_end)
-      tok_dic['end']=tok_dic['begin']+len(tok_dic['text'])
-      prev_tok_end=tok_dic['end']-sent_dic['begin']
-      sent_dic['tokens'].append(tok_dic)
-    annotations['sentences'].append(sent_dic)
-  ner = []
-  for i in dic['ner']:
-    for j in i:
-      ner.append(j)
-  relations = []
-  for i in dic['relations']:
-    for j in i:
-      relations.append(j)
-  ment_map, ignore_ments={}, []
-  all_tokens = []
-  for ele in dic['sentences']:
-    all_tokens+=ele
-  prev_ment_end = 0
-  ment_count = 0
-  for i, ment in enumerate(ner):
-    ment_dic={}
-    ment_text = make_phrases(all_tokens[ment[0]:ment[1]+1])[1:]
-    ment_dic['begin'] = annotations['text'].find(ment_text, prev_ment_end)
-    ment_dic['end'] = ment_dic['begin'] + len(ment_text)
-    prev_ment_end = ment_dic['end']
-    ment_dic['type'] = ment[2]
-    ment_dic['text'] = ment_text
-    all_mentions.append(ment_dic['type'])
-    if ment_dic['begin']!=-1: 
-      ment_dic['id']='m'+str(ment_count)
-      ment_count+=1
-      ment_map[str(ment[0])+','+str(ment[1])]=[ment_dic['id'], ment_dic['type']]
-      annotations['mentions'].append(ment_dic)
-    else: ignore_ments.append(str(ment[0])+','+str(ment[1]))
-
-  for i, rel in enumerate(relations):
-    if str(rel[0])+','+str(rel[1]) in ignore_ments or str(rel[2])+','+str(rel[3]) in ignore_ments: continue
-    rel_dic={}
-    rel_dic['id']='r'+str(i)
-    rel_dic['type']=rel[-1]
-    rel_dic['args']=[ment_map[str(rel[0])+','+str(rel[1])][0], ment_map[str(rel[2])+','+str(rel[3])][0]]
-    poss_rels[ment_map[str(rel[0])+','+str(rel[1])][1]+','+ment_map[str(rel[2])+','+str(rel[3])][1]]=rel_dic['type']
-    all_rels.append(rel_dic['type'])
-    annotations['relations'].append(rel_dic)
-  
-  formatted_data.append(annotations)
-
-
-random.shuffle(formatted_data)
-train_files = formatted_data[:int(0.8*len(formatted_data))]
-test_files = formatted_data[int(0.8*len(formatted_data)):]
-
-print(np.unique(all_rels), np.unique(all_mentions))
-pprint.pprint(poss_rels)
-
-for k, v in poss_rels.items():
-	left_ent = entity_encode[k.split(',')[0]]
-	right_ent = entity_encode[k.split(',')[1]]
-	eles = [0]*len(relation_encode)
-	eles[relation_encode[v]]=1
-	relation_possibility[(left_ent, right_ent)] = eles
-pprint.pprint(relation_possibility)
-
-"""# New Section"""
+from io import BytesIO
+import nltk.data
+nltk.download('punkt')
+sent_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 
 pre_trained_model_type = 'bert-base-uncased'
 model_path = 'bert-base-uncased'
@@ -165,82 +61,6 @@ freeze_transformer = False
 tokenizer = BertTokenizer.from_pretrained(pretrained_model_name_or_path='bert-base-uncased')
 UNK_TOKEN, CLS_TOKEN, SEP_TOKEN = 100, 101, 102
 
-def get_word_doc(doc):
-	words = []
-	begins = []
-	ends = []
-	sentence_embedding = []
-	sentence_count = 0
-	for sentence in doc['sentences']:
-		for word in sentence['tokens']:
-			words.append(word['text'])
-			begins.append(word['begin'])
-			ends.append(word['end'])
-			sentence_embedding.append(sentence_count)
-		sentence_count+=1
-	return words, begins, ends, sentence_embedding
-
-def get_token_id(words):
-	token_id = []
-	for word in words:
-		token_id.append(tokenizer(word)['input_ids'][1:-1])
-	return token_id
-
-def expand_token_id(token_id, words, begins, ends, sentence_embedding):
-	assert len(token_id)==len(words)==len(begins)==len(ends)==len(sentence_embedding), 'input lists do not have the same length, abort'
-	
-	new_token_id = []
-	new_words = []
-	new_begins = []
-	new_ends = []
-	new_sentence_embedding = []
-	for i in range(len(token_id)):
-		for tid in token_id[i]:
-			new_token_id.append(tid)
-			new_words.append(words[i])
-			new_begins.append(begins[i])
-			new_ends.append(ends[i])
-			new_sentence_embedding.append(sentence_embedding[i])
-	return new_token_id, new_words, new_begins, new_ends, new_sentence_embedding
-
-def get_entity_doc(doc, begins):
-	entity_embedding = [0]*len(begins)
-	entity_position = {}
-	for mention in doc['mentions']:
-		low = bisect.bisect_left(begins, mention['begin'])
-		high = bisect.bisect_left(begins, mention['end'])
-		entity_position[mention['id']] = (low, high)
-		for i in range(low, high):		
-			entity_embedding[i] = entity_encode[mention['type']]
-	return entity_position, entity_embedding
-
-def get_relation_doc(doc):
-	relations = {}
-	for relation in doc['relations']:
-		relations[relation['id']] = {'type': relation_encode[relation['type']], 'source': relation['args'][0],\
-					     'target': relation['args'][1]}
-	return relations
-
-def extract_doc(document):
-	data_frame = pd.DataFrame()
-	words, begins, ends, sentence_embedding = get_word_doc(document)
-	token_ids = get_token_id(words)
-	data_frame['token_ids'], data_frame['words'], data_frame['begins'], data_frame['ends'],\
-	data_frame['sentence_embedding'] = expand_token_id(token_ids, words, begins, ends, sentence_embedding)
-	data_frame['tokens'] = tokenizer.convert_ids_to_tokens(data_frame['token_ids'])
-	entity_position, data_frame['entity_embedding'] = get_entity_doc(document, list(data_frame['begins']))
-	relations = get_relation_doc(document)
-	return {'document': '',\
-		'data_frame': data_frame,\
-		'entity_position': entity_position,\
-		'relations': relations}
-
-def extract_data(group):
-	if group=='Train': docs=train_files
-	if group=='Test': docs=test_files
-	data=[]
-	for document in docs: data.append(extract_doc(document))
-	return data
 
 def generate_entity_mask(doc, is_training, neg_entity_count, max_span_size):
 	sentence_length = doc['data_frame'].shape[0]
@@ -331,76 +151,7 @@ def doc_to_input(doc, device, is_training=True, neg_entity_count=100, neg_relati
 		'entity_span': entity_span,
 		'relation_span': relation_span}
 
-def data_generator(group, device, is_training=True, neg_entity_count=100, neg_relation_count=100, max_span_size=10):
-	data=extract_data(group)
-	for document_number, doc in enumerate(data):
-		sentence_id, starting_index = 0, 0
-		doc['data_frame'].loc[doc['data_frame'].index.max() + 1, 'sentence_embedding']\
-		= doc['data_frame']['sentence_embedding'].max() + 1
-		for index, row in doc['data_frame'].iterrows():
-			if row['sentence_embedding']!=sentence_id:
-				if index-starting_index>510:
-					starting_index = index-510
-				tmp_entity_position = {}
-				for entity in doc['entity_position']:
-					if starting_index<=doc['entity_position'][entity][0] < doc['entity_position'][entity][1]<=index:
-						tmp_entity_position[entity] = (
-							doc['entity_position'][entity][0] - starting_index,
-							doc['entity_position'][entity][1] - starting_index
-						)
-				tmp_relations={}
-				for relations in doc['relations']:
- 					if doc['relations'][relations]['source'] in tmp_entity_position and doc['relations'][relations]['target'] in tmp_entity_position:
-						 tmp_relations[relations] = doc['relations'][relations]
-				tmp_doc = {
-					'document_name': str(document_number),\
-					'data_frame': doc['data_frame'][starting_index:index].reset_index(drop=True),\
-					'entity_position': tmp_entity_position,\
-					'relations': tmp_relations}
-				yield doc_to_input(tmp_doc, device, is_training, neg_entity_count, neg_relation_count, max_span_size)
-				sentence_id = row['sentence_embedding']
-				starting_index = index
 
-def evaluate_results(true_labels, predicted_labels, label_map, classes):
-	precision, recall, fbeta_score, support = \
-		precision_recall_fscore_support(true_labels, predicted_labels, average=None, labels=classes, zero_division=0)
-	result = pd.DataFrame(index=[label_map[c] for c in classes])
-	result['precision'] = precision
-	result['recall'] = recall
-	result['fbeta_score'] = fbeta_score
-	result['support'] = support
-	result.loc['macro'] = list(precision_recall_fscore_support(true_labels, predicted_labels, average='macro', labels=classes, 
-	                                                           zero_division=0))
-	return result
-
-def evaluate_f1_global(true_labels, pred_labels):
-	return f1_score(true_labels, pred_labels, zero_division=0)
-
-def evaluate_span(true_span, pred_span, label_map, classes):
-	assert len(true_span)==len(pred_span)
-	true_label, pred_label=[],[]
-	for true_span_batch, pred_span_batch in zip(true_label, pred_span):
-		true_span_batch = dict([((item[0][:2] if isinstance(item[0], tuple) else item[0],
-					  item[1][:2] if isinstance(item[1], tuple) else item[1]),
-					  item[2]) for item in true_span_batch])
-
-		pred_span_batch = dict([((item[0][:2] if isinstance(item[0], tuple) else item[0],
-					  item[1][:2] if isinstance(item[1], tuple) else item[1]),
-					  item[2]) for item in pred_span_batch])
-
-		s= set()
-		s.update(true_span_batch.keys())
-		s.update(pred_span_batch.keys())
-		for span in s:
-			if span in true_span_batch:
-				true_label.append(true_span_batch[span])
-			else: true_label.append(0)
-			if span in pred_span_batch:
-				pred_label.append(pred_span_batch[span])
-			else: pred_label.append(0)
-	
-	assert len(true_label)==len(pred_label)
-	return evaluate_results(true_label, pred_label, label_map, classes)
 
 class Joint_Model(BertPreTrainedModel):
   def __init__(self, config: BertConfig, relation_types: int, entity_types: int, width_embedding_size: int, prop_drop: float, 
@@ -620,8 +371,9 @@ class Joint_Model(BertPreTrainedModel):
       'span': relation_span}
     return output
 
-os.makedirs(model_save_path, exist_ok=True)
-EPOCH_="epoch:"
+entity_encode = {'None':0, 'Generic':1, 'Material':2, 'Method':3, 'Metric':4, 'OtherScientificTerm':5, 'Task':6}
+relation_encode = {'None':0, 'COMPARE':1, 'CONJUNCTION':2, 'EVALUATE-FOR':3, 'FEATURE-OF':4, 'HYPONYM-OF':5, 'PART-OF': 6, 'USED-FOR':7}
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 entity_label_map = {v:k for k, v in entity_encode.items()}
 entity_classes = list(entity_label_map.keys())
@@ -633,368 +385,46 @@ relation_classes.remove(0)
 
 tokenizer = BertTokenizer.from_pretrained(pretrained_model_name_or_path='bert-base-uncased')
 
+relation_possibility=None
 
-def get_optimizer_params(model):
-	param_optimizer = list(model.named_parameters())
-	no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.Weight']
-	optimizer_params1 = [{'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay) and n.startswith('bert')],
-                       'weight_decay': weight_decay},
-                       {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay) and n.startswith('bert')],
-                        'weight_decay':0.0}]
-	optimizer_params2 = [{'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay) and not n.startswith('bert')],
-                       'weight_decay': weight_decay},
-                      {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay) and not n.startswith('bert')],
-                       'weight_decay': 0.0}]
-	return optimizer_params1, optimizer_params2
-
-
-def take_first_tokens(embedding, words):
-	reduced_embedding = []
-	for i, word in enumerate(words):
-		if i==0 or word!=words[i-1]:
-			reduced_embedding.append(embedding[i])
-	return reduced_embedding
-
-train_generator = data_generator('Train', device, is_training=True, 
-              neg_entity_count = neg_entity_count,
-              neg_relation_count = neg_relation_count,
-              max_span_size = max_span_size)
-train_dataset = list(train_generator)
-test_generator = data_generator('Test', device, is_training=True, 
-              neg_entity_count = neg_entity_count,
-              neg_relation_count = neg_relation_count,
-              max_span_size = max_span_size)
-test_dataset = list(test_generator)
 config = BertConfig.from_pretrained('bert-base-uncased')
-random.shuffle(train_dataset)
-new_dataset = {'train': None, 'test': None, 'val': None}
-new_dataset['train'], new_dataset['test'], new_dataset['val'] = train_dataset, test_dataset, test_dataset
-entity_weights = torch.tensor([1.0]*len(range(entity_types)))
-train_size = len(new_dataset['train'])
-val_dataset = new_dataset['val']
-
-def evaluate_val(neural_model, eval_dataset, epoch, data_val, entity_weights):
-	neural_model.eval()
-	eval_size = len(eval_dataset)
-	eval_entity_span_pred = []
-	eval_entity_span_true = []
-	eval_entity_embedding_pred = []
-	eval_entity_embedding_true = []
-	eval_relation_span_pred = []
-	eval_relation_span_true = []
-	for inputs, infos in tqdm(eval_dataset, total=eval_size, desc='Evaluating the validation set'):
-		outputs = neural_model(entity_weights, **inputs, is_training=False)
-		eval_entity_span_pred.append(outputs['entity']['span'])
-		eval_entity_span_true.append(infos['entity_span'])
-	if not is_overlapping:
-		eval_entity_embedding_pred+= take_first_tokens(outputs['entity']['embedding'].tolist(), infos['words'])
-		eval_entity_embedding_true+= take_first_tokens(infos['entity_embedding'].tolist(), infos['words'])
-		assert len(eval_entity_embedding_pred) == len(eval_entity_embedding_true)
-	eval_relation_span_pred.append([] if outputs['relation'] is None else outputs['relation']['span'])
-	eval_relation_span_true.append(infos['relation_span'])
-	results = pd.concat([
-		evaluate_span(eval_entity_span_true, eval_entity_span_pred, entity_label_map, entity_classes),
-		evaluate_span(eval_relation_span_true, eval_relation_span_pred, relation_label_map, relation_classes),
-		], keys = ['Entity span', 'Strict relation'])
-	return results
-
 neural_model = Joint_Model.from_pretrained('bert-base-uncased', config=config, relation_types = relation_types,
             entity_types = entity_types, width_embedding_size = width_embedding_size,
             prop_drop = prop_drop, max_pairs=max_pairs)
-
 neural_model.to(device)
-optimizer_params1, optimizer_params2 = get_optimizer_params(neural_model)
-optimizer1 = AdamW(optimizer_params1, lr=lr, weight_decay=weight_decay, correct_bias=False)
-scheduler1 = transformers.get_linear_schedule_with_warmup(optimizer1, num_warmup_steps=lr_warmup*train_size//batch_size*epochs, num_training_steps=train_size//batch_size*epochs)
-optimizer2 = AdamW(optimizer_params2, lr=lr*task_learning_rate_fac, weight_decay=weight_decay,
-        correct_bias=False)
-scheduler2 = transformers.get_linear_schedule_with_warmup(optimizer2, 
-                                                          num_warmup_steps=lr_warmup*train_size//batch_size\
-                                                          *epochs, num_training_steps=train_size//batch_size*\
-                                                          epochs)
 
-for epoch in range(epochs):
-  losses=[]
-  entity_losses = []
-  relation_losses = []
-  train_entity_pred = []
-  train_entity_true = []
-  train_relation_pred = []
-  train_relation_true = []
-  neural_model.zero_grad()
-  iter_count = 1
-  
-  for inputs, infos in tqdm(new_dataset['train'], total=train_size, desc='Train epoch %s'%epoch):
-    neural_model.train()
-    outputs=neural_model(entity_weights, **inputs, is_training=True)
-    loss = outputs['loss']
-    loss = loss/grad_acc_steps
-    loss.backward()
-    if iter_count%grad_acc_steps==0:
-      torch.nn.utils.clip_grad_norm_(neural_model.parameters(), max_grad_norm)
-      optimizer1.step()
-      optimizer2.step()
-      neural_model.zero_grad()
-    if iter_count%batch_size==0:
-      scheduler1.step()
-      scheduler2.step()
-    iter_count+=1
-    losses.append(loss.item())
-    entity_losses.append(outputs['entity']['loss'])
-    if outputs['relation'] is not None:
-      relation_losses.append(outputs['relation']['loss'])
-    train_entity_pred+= outputs['entity']['pred'].tolist()
-    train_entity_true+= inputs['entity_label'].tolist()
-    train_relation_pred+= [] if outputs['relation'] is None else outputs['relation']['pred'].tolist()
-    train_relation_true+= inputs['relation_label'].tolist()
-    assert len(train_entity_pred) == len(train_entity_true)
-    assert len(train_relation_pred) == len(train_relation_true)
-  print(EPOCH_, epoch, 'average_loss:', sum(losses)/len(losses))
-  print(EPOCH_, epoch, 'average entity loss:', sum(entity_losses)/len(entity_losses))
-  print(EPOCH_, epoch, 'average relation loss:', sum(relation_losses)/len(relation_losses))
-  results = pd.concat([
-      evaluate_results(train_entity_true, train_entity_pred, entity_label_map, entity_classes),
-      evaluate_results(train_relation_true, train_relation_pred, relation_label_map, relation_classes)]\
-      , keys=['Entity', 'Relation'])
+state_dict = torch.load(model_save_path, map_location=device)
+neural_model.load_state_dict(state_dict, strict=False)
 
-output_dicts = []
-def convert(doc, full_text, out_folder):
-	dic={}
-	dic['model_info']='Joint model'
-	dic['title']=doc[0]
-	dic['paragraph']=full_text
-	file_name=out_folder+doc[0]+'.json'
-	dic['predicted_data']={'entities':[], 'relations':[]}
-	ent_map, ent_count = {}, 1
-	for sent in doc[1:]:
-		sent_text=sent[0]
-		for ent in sent[2]:
-			if ent==[]:continue
-			ent_dic={}
-			ent_dic['category']=ent[-2]
-			ent_dic['sentence']=sent_text
-			ent_dic['startIndex']=ent[0]
-			ent_dic['endIndex']=ent[1]
-			ent_dic['text']=dic['paragraph'][ent_dic['startIndex']:ent_dic['endIndex']]
-			ent_dic['id']=str(uuid.uuid4())
-			ent_count+=1
-			ent_map[str(ent[0])+ ' '+str(ent[1])]=ent_dic['id']
-			dic['predicted_data']['entities'].append(ent_dic)
+def predict(neural_model, sentences):
+  entity_weights = torch.tensor([1.0]*len(range(entity_types)))
+  for sentence in sentences:
+    word_list = sentence.split()
+    words, token_ids = [], []
+    for word in word_list:
+      token_id = tokenizer(word)["input_ids"][1:-1]
+      for tid in token_id:
+        words.append(word)
+        token_ids.append(tid)
+    data_frame = pd.DataFrame()
+    data_frame['words'] = words
+    data_frame['token_ids'] = token_ids
+    data_frame['entity_embedding'] = 0
+    data_frame['sentence_embedding'] = 0
+    doc = {'data_frame': data_frame, 'entity_position':{}, 'entities':{}, 'relations':{}}
+    inputs, infos = doc_to_input(doc, device, is_training=False, max_span_size = max_span_size)
+    outputs = neural_model(entity_weights, **inputs, is_training=False)
+    pred_entity_span = outputs['entity']['span']
+    pred_relation_span = [] if outputs['relation'] is None else outputs['relation']['span']
+    tokens = tokenizer.convert_ids_to_tokens(token_ids)
+    print('Sentence: ', sentence)
+    print('Entities: (', len(pred_entity_span), ')')
+    for begin, end, entity_type in pred_entity_span:
+      print(entity_label_map[entity_type], '|', ' '.join(tokens[begin:end]))
+    print('Relations: (', len(pred_relation_span), ')')
+    for e1, e2, relation_type in pred_relation_span:
+      print(relation_label_map[relation_type], '|', ' '.join(tokens[e1[0]:e1[1]]), ' '.join(tokens[e2[0]:e2[1]]))
 
-	for sent in doc[1:]:
-		sent_text = sent[0]
-		for rel in sent[-1]:
-			if rel==[]: continue
-			rel_dic={}
-			rel_dic['inEntity']={}
-			rel_dic['inEntity']['category']=rel[-2]
-			rel_dic['inEntity']['startIndex']=rel[0]
-			rel_dic['inEntity']['endIndex']=rel[1]
-			rel_dic['inEntity']['text']=dic['paragraph'][rel_dic['inEntity']['startIndex']:rel_dic['inEntity']['endIndex']]
-			if str(rel[0]) + ' ' + str(rel[1]) in ent_map.keys():
-				rel_dic['inEntity']['id']=ent_map[str(rel[0])+' '+str(rel[1])]
-			else:
-				ent_dic={}
-				ent_dic['category']=rel[-2]
-				ent_dic['sentence']=sent_text
-				ent_dic['startIndex']=rel[0]
-				ent_dic['endIndex']=rel[1]
-				ent_dic['text']=dic['paragraph'][ent_dic['startIndex']:ent_dic['endIndex']]
-				ent_dic['id']=str(uuid.uuid4())
-				ent_count+=1
-				ent_map[str(rel[0]) + ' ' + str(rel[1])] = ent_dic['id']
-				rel_dic['inEntity']['id'] =ent_dic['id']
-				dic['predicted_data']['entities'].append(ent_dic)
-			rel_dic['inEntity']['sentence']=sent_text
-		
-			rel_dic['outEntity']={}
-			rel_dic['outEntity']['category']=rel[-1]
-			rel_dic['outEntity']['startIndex']=rel[2]
-			rel_dic['outEntity']['endIndex']=rel[3]
-			rel_dic['outEntity']['text']=dic['paragraph'][rel_dic['outEntity']['startIndex']:rel_dic['outEntity']['endIndex']]
-			if str(rel[2])+' '+str(rel[3]) in ent_map.keys():
-				rel_dic['outEntity']['id']=ent_map[str(rel[2])+' '+str(rel[3])]
-			else:
-				ent_dic={}
-				ent_dic['category']=rel[-1]
-				ent_dic['sentence']=sent_text
-				ent_dic['startIndex']=rel[2]
-				ent_dic['endIndex']=rel[3]
-				ent_dic['text']=dic['paragraph'][ent_dic['startIndex']:ent_dic['endIndex']]
-				ent_dic['id']=str(uuid.uuid4())
-				ent_count+=1
-				ent_map[str(rel[2]) + ' ' + str(rel[3])] = ent_dic['id']
-				rel_dic['outEntity']['id'] = ent_dic['id']
-				dic['predicted_data']['entities'].append(ent_dic)
-			rel_dic['outEntity']['sentence']=sent_text
+sentences="One of the major problems one is faced with when decomposing words into their constituent parts is ambiguity: the generation of multiple analyses for one input word, many of which are implausible. In order to deal with ambiguity, the MORphological PArser MORPA is provided with a probabilistic context-free grammar-LRB-PCFG-RRB-, i.e. it combines a`` conventional'' context-free morphological grammar to filter out ungrammatical segmentations with a probability-based scoring function which determines the likelihood of each successful parse. Consequently, remaining analyses can be ordered along a scale of plausibility. Test performance data will show that a PCFG yields good results in morphological parsing. MORPA is a fully implemented parser developed for use in a text-to-speech conversion system."
 
-			rel_dic['sentence']=sent_text
-			rel_dic['category']=rel[4]
-			rel_dic['id_pair']=[rel_dic['inEntity']['id'], rel_dic['outEntity']['id']]
-			dic['predicted_data']['relations'].append(rel_dic)
-	output_dicts.append(dic)
-
-relation_possibility = None
-
-def take_first_tokens(embedding, words):
-	reduced_embedding = []
-	for i, word in enumerate(words):
-		if i==0 or word!=words[i-1]: reduced_embedding.append(embedding[i])
-	return reduced_embedding
-
-
-
-def get_results(eval_dataset, neural_model, category_weights):
-	neural_model.eval()
-	eval_size = len(eval_dataset)
-	eval_entity_span_pred = []
-	eval_entity_span_true = []
-	eval_entity_embedding_pred = []
-	eval_entity_embedding_true = []
-	eval_relation_span_pred = []
-	eval_relation_span_true = []
-	prev_doc = ''
-	doc = 0
-	ent_rels = []
-
-	for inputs, infos in tqdm(eval_dataset, total=eval_size, desc='Evaluating the eval set'):
-		try:
-			outputs=neural_model(category_weights, **inputs, is_training=False)
-		except:
-			continue
-		try: ent_rels.append([infos['entity_span'], infos['relation_span'], outputs['entity']['span'], outputs['relation']['span']])
-		except: ent_rels.append([infos['entity_span'], infos['relation_span'], outputs['entity']['span'], []])
-		if prev_doc!=infos['document_name']:
-			if doc!=0: convert(doc, full_text, '')
-			full_text = ''
-			doc=[infos['document_name']]
-			prev_doc = infos['document_name']
-			words = infos['words'].tolist()
-			embeds = outputs['entity']['embedding'].tolist()
-			spans = [i for i in outputs['entity']['span'] if i[-1]!=0]
-			new_words, new_embeds, new_relations, pos = [words[0]], [embeds[0]], [], [(0, len(words[0]))]
-			for i in range(1, len(embeds)):
-				if words[i]!=words[i-1]:
-					new_words.append(words[i])
-					new_embeds.append(embeds[i])
-					pos.append((pos[-1][-1]+1, pos[-1][-1]+1+len(words[i])))
-			try:
-				relations = [i for i in outputs['relation']['span'] if i[0][-1]!=0 and i[1][-1]!=0]
-				for i in relations:
-					if i[0] not in spans:
-						spans.append(i[0])
-					if i[1] not in spans:
-						spans.append(i[1])
-			except:
-				relations=[]
-			span_map = []
-			for i in spans:
-				span_content = ' '.join(pd.unique(words[i[0]:i[1]]).tolist())
-				new_sent = ' '.join(new_words)
-				span_beg = new_sent.find(span_content)
-				span_end = span_beg + len(span_content)
-				span_map.append((span_beg, span_end, list(entity_encode.keys())[list(entity_encode.values()).index(int(i[-1]))]))
-			ents = []
-			prev_embed = new_embeds[0]
-			begin = 0
-			if len(new_embeds)==1: continue
-			for i in range(1, len(new_embeds)):
-				if new_embeds[i]!=prev_embed:
-					end=i-1
-					if prev_embed!=0:
-						st=len(' '.join(new_words[:begin]))+1-(begin==0)
-						fin = len(' '.join(new_words[:end+1]))
-						ent_conf=1.0
-						ents.append([st, fin, ' '.join(new_words)[st:fin], list(entity_encode.keys())[list(entity_encode.values()).\
-                                                                                    index(int(prev_embed))], ent_conf])
-					begin=i
-					prev_embed = new_embeds[i]
-			if len(new_embeds)>=2:
-				if new_embeds[i]!=0:
-					st = len(' '.join(new_words[:begin]))+1-(begin==0)
-					fin = len(' '.join(new_words))
-					ent_conf=1.0
-					ents.append([st, fin, ' '.join(new_words)[st:fin], list(entity_encode.keys())[list(entity_encode.values()).\
-                                                                                   index(int(new_embeds[i]))], ent_conf])
-			rels=[]
-			for i in relations:
-				left = [span_map[spans.index(i[0])][0], span_map[spans.index(i[0])][1]]
-				right = [span_map[spans.index(i[1])][0], span_map[spans.index(i[1])][1]]
-				rel_name = list(relation_encode.keys())[list(relation_encode.values()).index(int(i[-1]))]
-				rels.append(left+right+[rel_name]+[' '.join(new_words)[left[0]:left[1]]]+[' '.join(new_words)[right[0]:right[1]]]+\
-                [span_map[spans.index(i[0])][-1]]+[span_map[spans.index(i[1])][1]])
-			doc.append([' '.join(new_words), pos, ents, rels])
-			prev_len=len(' '.join(new_words))
-			full_text+=' '.join(new_words)
-
-		else:
-			prev_doc = infos['document_name']
-			words = infos['words'].tolist()
-			embeds = outputs['entity']['embedding'].tolist()
-			spans = [i for i in outputs['entity']['span'] if i[-1]!=0]
-
-			for i in range(1, len(embeds)):
-				if words[i]!=words[i-1]:
-					new_words.append(words[i])
-					new_embeds.append(embeds[i])
-					pos.append((pos[-1][-1]+1, pos[-1][-1]+1+len(words[i])))
-			try:
-				relations = [i for i in outputs['relation']['span'] if i[0][-1]!=0 and i[1][-1]!=0]
-				for i in relations:
-					if i[0] not in spans:
-						spans.append(i[0])
-					if i[1] not in spans:
-						spans.append(i[1])
-			except:
-				relations=[]
-
-			span_map = []
-			for i in spans:
-				span_content = ' '.join(pd.unique(words[i[0]:i[1]]).tolist())
-				new_sent = ' '.join(new_words)
-				span_beg = new_sent.find(span_content)
-				span_end = span_beg + len(span_content)
-				span_map.append((span_beg, span_end, list(entity_encode.keys())[list(entity_encode.values()).index(int(i[-1]))]))
-
-			ents=[]
-			prev_embed=new_embeds[0]
-			begin=0
-			for i in range(1, len(new_embeds)):
-				if new_embeds[i]!=prev_embed:
-					end=i-1
-					if prev_embed!=0:
-						st=len(' '.join(new_words[:begin]))+1-(begin==0)
-						fin=len(' '.join(new_words[:end+1]))
-						ent_conf = 1.0
-						ents.append([st+prev_len, fin+prev_len, ' '.join(new_words)[st:fin], list(entity_encode.keys())\
-                   [list(entity_encode.values()).index(int(prev_embed[i]))], ent_conf])
-					begin=i
-					prev_embed = new_embeds[i]
-			if len(new_embeds)>=2:
-				if new_embeds[i]!=0:
-					st = len(' '.join(new_words[:begin]))+1-(begin==0)
-					fin = len(' '.join(new_words))
-					ent_conf=1.0
-					ents.append([st+prev_len, fin+prev_len, ' '.join(new_words)[st:fin], list(entity_encode.keys())\
-                  [list(entity_encode.values()).index(int(new_embeds[i]))], ent_conf])
-			rels=[]
-			for i in relations:
-				left=[span_map[spans.index(i[0])][0]+prev_len, span_map[spans.index(i[0])][1]+prev_len]
-				right = [span_map[spans.index(i[1])][0]+prev_len, span_map[spans.index(i[1])][1]+prev_len]
-				rel_name = list(relation_encode.keys())[list(relation_encode.values()).index(int(i[-1]))]
-				rels.append(left+right+[rel_name] + [' '.join(new_words)[left[0]-prev_len:left[1]-prev_len]]+[' '.join(new_words)[right[0]-prev_len:right[1]-prev_len]]+[span_map[spans.index(i[0])][-1]]+[span_map[spans.index(i[1])][-1]])
-			doc.append([' '.join(new_words), pos, ents, rels])
-			prev_len+=len(' '.join(new_words))
-			full_text+=' '.join(new_words)
-	convert(doc, full_text, '')
-
-
-category_weights=torch.FloatTensor([1]*len(range(entity_types)))
-entity_label_map = {v:k for k, v in entity_encode.items()}
-entity_classes = list(entity_label_map.keys())
-entity_classes.remove(0)
-
-relation_label_map = {v:k for k, v in relation_encode.items()}
-relation_classes = list(relation_label_map.keys())
-relation_classes.remove(0)
-get_results((train_dataset+test_dataset), neural_model, category_weights)
+predict(neural_model, sent_tokenizer.tokenize(sentences))
