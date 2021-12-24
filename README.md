@@ -53,7 +53,7 @@ Steps:
                     "end": 10,
                     "id": "s0-t2"
                 }....]}],
-	"text": "A model is presented to characterize the class of languages obtained by adding reduplication to context-free languages. The model is a pushdown automaton augmented with the ability to check reduplication by using the stack in a new way. The class of languages generated is shown to lie strictly between the context-free languages and the indexed languages. The model appears capable of accommodating the sort of reduplications that have been observed to occur in natural languages, but it excludes many of the unnatural constructions that other formal models have permitted.",
+	"text": "A model is presented to characterize the class of languages obtained by adding reduplication to context-free languages....",
     "id": "c827f119-12ce-42db-8dce-f4a8ab1caa6c"
 }
 
