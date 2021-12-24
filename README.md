@@ -61,5 +61,12 @@ Steps:
 3. Tune your model based on the results on validation set.
 4. Call "predict" function to get results on raw text inputs tokenized into sentences.
 
+import nltk
+import nltk.data
+nltk.download('punkt')
+sent_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
+
+sentences = "<input text>"
+predict(neural\_model, sent_tokenizer.tokenize(sentences))
 
 
