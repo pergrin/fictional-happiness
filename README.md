@@ -8,7 +8,7 @@ The input raw file as well as formatted files for the publically available sciER
 
 Users can use there own or other datasets after converting there respective inputs to the same format as of the files in the formatted_data.zip folder.
 
-![alt text](https://github.com/pergrin/fictional-happiness/tree/finished/images/2.png?raw=true)
+![Joint Training](https://github.com/pergrin/fictional-happiness/tree/finished/images/2.png?raw=true)
 
 
 Steps:
