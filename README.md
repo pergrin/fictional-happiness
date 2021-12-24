@@ -19,7 +19,7 @@ Steps:
             "end": 7,
             "type": "Generic",
             "text": "model"
-        }....],
+        }....],<br />
 	"relations": [
         {
             "args": [
@@ -28,7 +28,7 @@ Steps:
             ],
             "type": "USED-FOR",
             "id": "r0"
-        }....],
+        }....],<br />
 	"sentences": [
         {
             "begin": 0,
@@ -52,8 +52,8 @@ Steps:
                     "text": "is",
                     "end": 10,
                     "id": "s0-t2"
-                }....]}],
-	"text": "A model is presented to characterize the class of languages obtained by adding reduplication to context-free languages....",
+                }....]}],<br />
+	"text": "A model is presented to characterize the class of languages obtained by adding reduplication to context-free languages....",<br />
     "id": "c827f119-12ce-42db-8dce-f4a8ab1caa6c"
 }
 
@@ -61,12 +61,13 @@ Steps:
 3. Tune your model based on the results on validation set.
 4. Call "predict" function to get results on raw text inputs tokenized into sentences.
 
-import nltk
-import nltk.data
-nltk.download('punkt')
-sent_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
-
-sentences = "<input text>"
-predict(neural\_model, sent_tokenizer.tokenize(sentences))
+import nltk<br />
+import nltk.data<br />
+nltk.download('punkt')<br />
+sent_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')<br />
+<br />
+sentences = "input text"<br />
+<br />
+predict(neural\_model, sent_tokenizer.tokenize(sentences))<br />
 
 
