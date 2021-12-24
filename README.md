@@ -8,7 +8,7 @@ The input raw file as well as formatted files for the publically available sciER
 
 Users can use there own or other datasets after converting there respective inputs to the same format as of the files in the formatted_data.zip folder.
 
-![Joint Training](https://miro.medium.com/max/850/1*jdkVep6NTz8umOViKDPusA.png)
+![Joint Training](https://miro.medium.com/max/3688/1*rrIJOpJO8fkFECNHlwq-jQ.png)
 
 
 Steps:
