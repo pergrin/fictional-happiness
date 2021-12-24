@@ -13,8 +13,8 @@ Users can use there own or other datasets after converting there respective inpu
 
 Steps:
 1. Format input data to required format as mentioned:
-
-{
+```diff
++{
     "mentions": [
         {
             "begin": 2,
@@ -35,7 +35,7 @@ Steps:
 	"sentences": [
         {
             "begin": 0,
-            "text": "A model is presented to characterize the class of languages obtained by adding reduplication to context-free languages.",
+            "text": "A model is presented....",
             "end": 119,
             "tokens": [
                 {
@@ -59,6 +59,7 @@ Steps:
 	"text": "A model is presented to characterize the class of languages obtained by adding reduplication to context-free languages....",<br />
     "id": "c827f119-12ce-42db-8dce-f4a8ab1caa6c"
 }
+```
 
 2. Train the model
 3. Tune your model based on the results on validation set.
