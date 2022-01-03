@@ -12,9 +12,10 @@ info:
           * Prepare your dataset.
           * Train and test your model.
           * Input your base text i.e. the text upon which you want the extraction to be performed.
+          * Try with: In our current research into the design of cognitively well-motivated interfaces relying primarily on the display of graphical information, we have observed that graphical information alone does not provide sufficient support to users-particularly when situations arise that do not simply conform to the users' expectations. This can occur due to too much information being requested, too little, information of the wrong kind, etc.. To solve this problem, we are working towards the integration of natural language generation to augment the interaction
     ---
 servers:
-  - url: https://finished-fictional-happiness-serve-pergrin.endpoint.ainize.ai
+  - url: https://finished-fictional-happiness-pergrin.endpoint.ainize.ai
 
 paths:
   /predict:
