@@ -1,0 +1,47 @@
+openapi: 3.0.1
+
+info:
+  title: Extract named entities and underlying relations
+  version: 1.0.0
+  contact:
+    name: Tarun Ashutosh
+  description: |
+    Joint Entity and Relation Extraction
+    ---
+          How to use:
+          * Prepare your dataset.
+          * Train and test your model.
+          * Input your base text i.e. the text upon which you want the extraction to be performed.
+    ---
+servers:
+  - url: https://finished-fictional-happiness-serve-pergrin.endpoint.ainize.ai
+
+paths:
+  /predict:
+    post:
+      requestBody:
+        required: true
+        description: |
+          This request will extract entities and relations.
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                base_text:
+                  description: "The text upon which you want the extraction to be performed."
+              required:
+                - base_text
+      responses:
+        '200':
+          description: "Successful Response"
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: "Bad Request Error"
+        '429':
+          description: "Too many requests"
+        '500':
+          description: "Server-side Error"

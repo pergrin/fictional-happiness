@@ -72,6 +72,6 @@ sent_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 
 sentences = "input text"
 
-predict(neural\_model, sent_tokenizer.tokenize(sentences))
+predict(neural_model, sent_tokenizer.tokenize(sentences))
 ```
 

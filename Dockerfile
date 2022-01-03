@@ -1,7 +1,9 @@
-FROM python:3
+FROM ashutoshtarun/joint_model:1
 
-ADD app.py /
+WORKDIR /app
 
-RUN pip install flask transformers torch tqdm sklearn numpy nltk
+RUN pip install flask transformers torch nltk pandas sklearn
 
-CMD [ "python", "./app.py" ]
+COPY . .
+
+CMD ["python3", "app.py"]
