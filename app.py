@@ -471,6 +471,7 @@ def predict(base_text):
 def main():
     try:
         base_text = request.form.get('base_text')
+	#length = request.form.get('length')
 
     except Exception as e:
         return jsonify({'message': 'Invalid request'}), 500
@@ -480,5 +481,5 @@ def main():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port="5000")
+    app.run(host="0.0.0.0", port="8501")
 
