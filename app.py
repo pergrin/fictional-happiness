@@ -471,7 +471,7 @@ def predict(base_text):
 def main():
     try:
         base_text = request.form.get('base_text')
-	#length = request.form.get('length')
+	length = request.form.get('length')
 
     except Exception as e:
         return jsonify({'message': 'Invalid request'}), 500
